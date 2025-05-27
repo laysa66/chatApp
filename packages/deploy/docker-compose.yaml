@@ -1,0 +1,85 @@
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /run/docker.sock:/run/docker.sock:ro
+      - ./traefik_data/config/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ./traefik_data/config/conf.d/:/etc/traefik/conf.d/:ro
+      - ./traefik_data/data/certs/:/var/traefik/certs/:rw
+    environment:
+      # Cloudflare config
+      - CF_API_EMAIL=email@example.com # Replace with your Cloudflare email
+      - CF_DNS_API_TOKEN=sdfgdsfg010fdgdfgdfg1gdfhdf01 # Replace with your Cloudflare API token
+
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mydashboard.rule=Host(`proxy-dashboard.lysatech.fr`)
+      - traefik.http.routers.mydashboard.service=api@internal
+      - traefik.http.routers.mydashboard.tls.certresolver=cloudflare
+      - traefik.http.routers.mydashboard.tls=true
+      - traefik.http.routers.mydashboard.tls.domains[0].main=lysatech.fr
+      - traefik.http.routers.mydashboard.tls.domains[0].sans=*.lysatech.fr
+    security_opt:
+      - no-new-privileges:true
+    restart: always
+
+  chat-app-front:
+    build:
+      context: ../../
+      dockerfile: packages/front/Dockerfile
+    container_name: front
+    # ports:
+    #   - 3000:3000
+    env_file:
+      - ../front/.env
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.chat-app-front.entrypoints=web, websecure
+      - traefik.http.routers.chat-app-front.rule=Host(`chat.lysatech.fr`)
+      - traefik.http.services.chat-app-front.loadbalancer.server.port=3000
+      - traefik.http.routers.chat-app-front.tls.certresolver=cloudflare
+      - traefik.http.routers.chat-app-front.tls=true
+      - traefik.http.routers.chat-app-front.tls.domains[0].main=lysatech.fr
+      - traefik.http.routers.chat-app-front.tls.domains[0].sans=*.lysatech.fr
+  chat-app-back:
+    build:
+      context: ../../
+      dockerfile: packages/server/Dockerfile
+    container_name: api
+    env_file:
+      - ../server/config/prod.env
+    # ports:
+    #   - 4000:4000
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.chat-app-back.entrypoints=web, websecure
+      - traefik.http.routers.chat-app-back.rule=Host(`api.lysatech.fr`)
+      - traefik.http.services.chat-app-back.loadbalancer.server.port=4000
+      - traefik.http.routers.chat-app-back.tls.certresolver=cloudflare
+      - traefik.http.routers.chat-app-back.tls=true
+      - traefik.http.routers.chat-app-back.tls.domains[0].main=lysatech.fr
+      - traefik.http.routers.chat-app-back.tls.domains[0].sans=*.lysatech.fr
+    restart: always
+  db:
+    container_name: db
+    image: postgres:alpine
+    # Comment out the ports line if you don't want to expose the database port in production (no need for external access, the api will connect to it internally)
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=local
+      - POSTGRES_PASSWORD=local
+      - POSTGRES_DB=local
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    restart: always
+
+# volumes:
+
+networks:
+  default:
+    name: traefik-network

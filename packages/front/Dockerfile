@@ -1,0 +1,31 @@
+FROM node:24-alpine AS build
+
+ENV COMPOSE_BAKE=true
+
+WORKDIR /app
+
+# Copy server and common code, plus package.json and lockfile
+COPY yarn.lock ./yarn.lock
+COPY packages/front ./
+COPY packages/common ../common
+
+
+RUN yarn install
+RUN yarn build
+
+# --- Production image ---
+FROM node:24-alpine AS prod
+WORKDIR /app
+
+# Copy built code and common (for runtime relative imports)
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /common ../common
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/vite.config.ts ./vite.config.ts
+
+
+EXPOSE 3000
+
+# Start the server
+CMD ["yarn", "run", "preview"]
