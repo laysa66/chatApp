@@ -1,4 +1,4 @@
-# ws-chat : Document d'Architecture Technique 
+# ws-chat :
 
 ## Présentation
 
